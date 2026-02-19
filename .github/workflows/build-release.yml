@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 使用 msys2 环境提供可靠的 Windows 编译工具链
+      # 使用 msys2 环境提供可靠的 Windows 编译工具链，并安装所有依赖
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
@@ -22,6 +22,7 @@ jobs:
             make
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-nlohmann-json
+            mingw-w64-x86_64-libpcap
 
       # 编译项目
       - name: Build on Windows
