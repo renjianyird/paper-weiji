@@ -1,8 +1,8 @@
 # 编译器设置
 CC = gcc
 CXX = g++
-CFLAGS = -Wall -O2
-CXXFLAGS = -Wall -O2
+CFLAGS = -Wall -O2 -I./include
+CXXFLAGS = -Wall -O2 -I./include
 TARGET = paper
 
 # 源文件目录
