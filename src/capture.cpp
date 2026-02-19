@@ -20,10 +20,11 @@
 #include "io.hpp"
 #include "i18n.hpp"
 #include <ntddndis.h>
-#include <nlohmann/json.hpp>
+#include "json.hpp"
 
 // 为了方便使用，可以添加一个别名
 using json = nlohmann::json;
+
 
 
 CAPTURE::CAPTURE_RESULT *CAPTURE::global_capture_result = nullptr;
