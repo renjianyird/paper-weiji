@@ -21,6 +21,7 @@ jobs:
           install: >-
             make
             mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nlohmann-json  # 安装 json 依赖
 
       # 编译项目
       - name: Build on Windows
