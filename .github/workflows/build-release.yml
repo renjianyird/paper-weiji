@@ -7,35 +7,13 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        # 先只跑 Linux，跑通后再添加 macOS 和 Windows
-        os: [ubuntu-latest] # [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: windows-latest # 只在 Windows 平台编译
 
     steps:
       - uses: actions/checkout@v4
 
-      # Linux 平台编译
-      - name: Build on Linux
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt update
-          sudo apt install -y gcc g++ make
-          make
-          mv paper paper-${{ matrix.os }}
-
-      # macOS 平台编译
-      - name: Build on macOS
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install gcc make
-          gmake
-          mv paper paper-${{ matrix.os }}
-
-      # Windows 平台编译 (使用 msys2)
-      - name: Build on Windows
-        if: matrix.os == 'windows-latest'
+      # 使用 msys2 环境提供可靠的 Windows 编译工具链
+      - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -43,29 +21,25 @@ jobs:
           install: >-
             make
             mingw-w64-x86_64-gcc
-      - name: Compile on Windows
-        if: matrix.os == 'windows-latest'
+
+      # 编译项目
+      - name: Build on Windows
         shell: msys2 {0}
         run: |
           make
-          mv paper.exe paper-${{ matrix.os }}.exe
+          mv paper.exe paper-windows-latest.exe
 
       # 打包成 ZIP
-      - name: Zip Linux/macOS
-        if: matrix.os != 'windows-latest'
-        run: zip paper-${{ matrix.os }}.zip paper-${{ matrix.os }}
-
       - name: Zip Windows
-        if: matrix.os == 'windows-latest'
         shell: msys2 {0}
-        run: zip paper-${{ matrix.os }}.zip paper-${{ matrix.os }}.exe
+        run: zip paper-windows-latest.zip paper-windows-latest.exe
 
       # 上传产物
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: paper-${{ matrix.os }}
-          path: paper-${{ matrix.os }}.zip
+          name: paper-windows-latest
+          path: paper-windows-latest.zip
 
   # 自动发布 Release
   release:
