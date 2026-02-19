@@ -14,14 +14,15 @@ CXX_SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
 C_OBJECTS = $(C_SOURCES:.c=.o)
 CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
 
-# 链接所有目标文件生成可执行文件，包含 OpenSSL 依赖
+# 链接所有目标文件生成可执行文件，按正确顺序链接所有依赖
 $(TARGET): $(C_OBJECTS) $(CXX_OBJECTS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ \
 		/mingw64/lib/libpcap.a \
+		/mingw64/lib/libssl.a \
+		/mingw64/lib/libcrypto.a \
 		-lws2_32 \
 		-lwininet \
-		-lcrypto \
-		-lssl \
+		-lcrypt32 \
 		-static-libgcc \
 		-static-libstdc++ \
 		-static
