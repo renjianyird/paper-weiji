@@ -21,11 +21,7 @@
 #include "i18n.hpp"
 #include <ntddndis.h>
 #include "json.hpp"
-// 新增头文件：用于IP地址格式化
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
 
-// 为了方便使用，可以添加一个别名
 using json = nlohmann::json;
 
 CAPTURE::CAPTURE_RESULT *CAPTURE::global_capture_result = nullptr;
@@ -148,53 +144,32 @@ void CAPTURE::capture(CAPTURE_RESULT &result)
 
     IO::Debug(t("searching_hotspot"));
     pcap_if_t *selectedDevice = nullptr;
-    // 优化：遍历所有网卡，匹配192.168.137.x网段（不局限于192.168.137.1）
     for (pcap_if_t *device = devices; device && !selectedDevice; device = device->next)
     {
-        IO::Debug(t("checking_device") + ": " + std::string(device->name ? device->name : "unknown"));
-        for (pcap_addr_t *addr = device->addresses; addr && !selectedDevice; addr = addr->next)
+        if (device->addresses != NULL && !(device->flags & PCAP_IF_LOOPBACK))
         {
-            if (addr->addr && addr->addr->sa_family == AF_INET)
-            {
-                struct sockaddr_in *ipv4_addr = (struct sockaddr_in *)addr->addr;
-                char ip_str[INET_ADDRSTRLEN];
-                // 格式化IP地址为字符串（如192.168.137.1）
-                inet_ntop(AF_INET, &(ipv4_addr->sin_addr), ip_str, INET_ADDRSTRLEN);
-                
-                // 核心修改：匹配192.168.137.x整个网段，而非仅192.168.137.1
-                if (strncmp(ip_str, "192.168.137.", 10) == 0)
-                {
-                    IO::Debug(t("found_target_interface") + ": " + std::string(device->name) + " (IP: " + ip_str + ")");
-                    selectedDevice = device;
-                }
-            }
+            selectedDevice = device;
+            IO::Debug(t("found_target_interface") + ": " + std::string(device->name));
         }
     }
-
-    // 未找到热点网卡时，先释放资源再退出
     if (!selectedDevice)
-    {
-        pcap_freealldevs(devices); // 修复原代码内存泄漏问题
-        DIE(t("no_interface_found") + " (请确保开启移动热点，且网卡IP为192.168.137.x)");
-    }
+        DIE(t("no_interface_found"));
 
     IO::Debug(t("opening_capture_handle") + ": " + std::string(selectedDevice->name));
     pcap_t *packetCaptureHandle = pcap_open_live(selectedDevice->name, 65536, PCAP_OPENFLAG_PROMISCUOUS, 1000, errbuf);
     if (packetCaptureHandle == NULL)
-    {
-        pcap_freealldevs(devices); // 修复原代码内存泄漏问题
         DIE(t("unable_open_adapter") + ": " + errbuf);
-    }
     global_pcap_handle = packetCaptureHandle;
-    
     IO::Debug(t("checking_datalink"));
     if (pcap_datalink(packetCaptureHandle) != DLT_EN10MB)
         IO::Warn(t("non_ethernet_link"));
 
     IO::Debug(t("setting_packet_filter"));
-    u_int netmask = 0xffffff00; // 显式设置默认子网掩码（避免空指针）
+    u_int netmask;
     if (selectedDevice->addresses != NULL && selectedDevice->addresses->netmask != NULL)
         netmask = ((struct sockaddr_in *)(selectedDevice->addresses->netmask))->sin_addr.S_un.S_addr;
+    else
+        netmask = 0xffffff;
 
     struct bpf_program fcode;
     std::string pcap_filter_string = "tcp port 80";
@@ -205,7 +180,6 @@ void CAPTURE::capture(CAPTURE_RESULT &result)
         pcap_freealldevs(devices);
         DIE(t("unable_compile_filter") + ": " + std::string(pcap_geterr(packetCaptureHandle)));
     }
-    
     IO::Debug(t("setting_filter"));
     if (pcap_setfilter(packetCaptureHandle, &fcode) < 0)
     {
@@ -217,11 +191,9 @@ void CAPTURE::capture(CAPTURE_RESULT &result)
     IO::Warn(t("waiting_update_packets"));
     IO::Debug(t("starting_capture_loop"));
 
-    pcap_freealldevs(devices); // 释放网卡列表资源
+    pcap_freealldevs(devices);
     pcap_loop(packetCaptureHandle, -1, packet_handler, NULL);
-    
     IO::Info(t("captured_update_request") + ": " + result.productUrl);
     IO::Debug(t("closing_capture_handle"));
     pcap_close(packetCaptureHandle);
-    global_pcap_handle = nullptr; // 清空全局句柄，避免野指针
 }
