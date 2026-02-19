@@ -14,9 +14,9 @@ CXX_SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
 C_OBJECTS = $(C_SOURCES:.c=.o)
 CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
 
-# 链接所有目标文件生成可执行文件
+# 链接所有目标文件生成可执行文件，链接 pcap 库
 $(TARGET): $(C_OBJECTS) $(CXX_OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+	$(CXX) $(CXXFLAGS) -o $@ $^ -lpcap
 
 # 编译 .c 文件
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
