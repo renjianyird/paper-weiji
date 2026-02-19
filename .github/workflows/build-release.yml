@@ -1,40 +1,70 @@
-# 编译器设置
-CC = gcc
-CXX = g++
-CFLAGS = -Wall -O2 -I./include
-CXXFLAGS = -Wall -O2 -I./include
-TARGET = paper
+name: Build & Release C/C++ Paper (ZIP)
 
-# 源文件目录
-SRC_DIR = src
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # 允许手动触发
 
-# 自动查找 src/ 目录下所有 .c 和 .cpp 文件
-C_SOURCES = $(wildcard $(SRC_DIR)/*.c)
-CXX_SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
-C_OBJECTS = $(C_SOURCES:.c=.o)
-CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
+jobs:
+  build:
+    runs-on: windows-latest # 只在 Windows 平台编译
 
-# 链接所有目标文件生成可执行文件，按正确顺序链接所有依赖
-$(TARGET): $(C_OBJECTS) $(CXX_OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $^ \
-		/mingw64/lib/libpcap.a \
-		/mingw64/lib/libssl.a \
-		/mingw64/lib/libcrypto.a \
-		-lws2_32 \
-		-lwininet \
-		-lcrypt32 \
-		-static-libgcc \
-		-static-libstdc++ \
-		-static
+    steps:
+      - uses: actions/checkout@v4
 
-# 编译 .c 文件
-$(SRC_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+      # 使用 msys2 环境提供可靠的 Windows 编译工具链，并安装所有依赖
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libpcap
+            mingw-w64-x86_64-openssl
+            zip
 
-# 编译 .cpp 文件
-$(SRC_DIR)/%.o: $(SRC_DIR)/%.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+      # 编译项目
+      - name: Build on Windows
+        shell: msys2 {0}
+        run: |
+          make
+          mv paper.exe paper-windows-latest.exe
 
-# 清理编译产物
-clean:
-	rm -f $(TARGET) $(SRC_DIR)/*.o
+      # 打包成 ZIP
+      - name: Zip Windows
+        shell: msys2 {0}
+        run: zip paper-windows-latest.zip paper-windows-latest.exe
+
+      # 上传产物
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-windows-latest
+          path: paper-windows-latest.zip
+
+  # 自动发布 Release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate version tag
+        id: version
+        run: echo "tag=v$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.version.outputs.tag }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          files: artifacts/**/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
