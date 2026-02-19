@@ -21,6 +21,7 @@
 #include "i18n.hpp"
 #include <ntddndis.h>
 #include "json.hpp"
+#include <ws2tcpip.h>
 
 using json = nlohmann::json;
 
@@ -144,21 +145,37 @@ void CAPTURE::capture(CAPTURE_RESULT &result)
 
     IO::Debug(t("searching_hotspot"));
     pcap_if_t *selectedDevice = nullptr;
-    for (pcap_if_t *device = devices; device && !selectedDevice; device = device->next)
+
+    // 强制选择第一个非回环网卡
+    for (pcap_if_t *device = devices; device; device = device->next)
     {
-        if (device->addresses != NULL && !(device->flags & PCAP_IF_LOOPBACK))
+        if (!(device->flags & PCAP_IF_LOOPBACK))
         {
             selectedDevice = device;
-            IO::Debug(t("found_target_interface") + ": " + std::string(device->name));
+            IO::Debug(t("found_target_interface") + ": " + std::string(device->name ? device->name : "unknown"));
+            break;
         }
     }
-    if (!selectedDevice)
+
+    // 容错：如果没有非回环网卡，强制使用第一个设备
+    if (!selectedDevice && devices != nullptr)
+    {
+        selectedDevice = devices;
+        IO::Warn("No suitable interface found, forcing use of first device: " + std::string(selectedDevice->name ? selectedDevice->name : "unknown"));
+    }
+    else if (!selectedDevice)
+    {
+        pcap_freealldevs(devices);
         DIE(t("no_interface_found"));
+    }
 
     IO::Debug(t("opening_capture_handle") + ": " + std::string(selectedDevice->name));
     pcap_t *packetCaptureHandle = pcap_open_live(selectedDevice->name, 65536, PCAP_OPENFLAG_PROMISCUOUS, 1000, errbuf);
     if (packetCaptureHandle == NULL)
+    {
+        pcap_freealldevs(devices);
         DIE(t("unable_open_adapter") + ": " + errbuf);
+    }
     global_pcap_handle = packetCaptureHandle;
     IO::Debug(t("checking_datalink"));
     if (pcap_datalink(packetCaptureHandle) != DLT_EN10MB)
