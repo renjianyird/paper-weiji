@@ -14,9 +14,15 @@ CXX_SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
 C_OBJECTS = $(C_SOURCES:.c=.o)
 CXX_OBJECTS = $(CXX_SOURCES:.cpp=.o)
 
-# 链接所有目标文件生成可执行文件，链接所有必要的 Windows 库
+# 链接所有目标文件生成可执行文件，完全静态链接所有依赖
 $(TARGET): $(C_OBJECTS) $(CXX_OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $^ -lpcap -lws2_32 -lwininet
+	$(CXX) $(CXXFLAGS) -o $@ $^ \
+		/mingw64/lib/libpcap.a \
+		-lws2_32 \
+		-lwininet \
+		-static-libgcc \
+		-static-libstdc++ \
+		-static
 
 # 编译 .c 文件
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
